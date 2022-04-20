@@ -6,6 +6,7 @@ import random
 import re
 
 def scoring_unsupervised(df):
+    # Adapted from https://github.com/wbsg-uni-mannheim/UnsupervisedBootAL on 2022-16-04
     #Only using the scores 
     other_columns  = df.drop(['ListingId_1','ListingId_2','ids'], axis=1)
     #Including nan values to count the densities
@@ -31,7 +32,7 @@ def scoring_unsupervised(df):
 
 
 def elbow_threshold(sorted_dataset):
-    
+    #Retrieved from https://github.com/wbsg-uni-mannheim/UnsupervisedBootAL on 2022-16-04
     sim_scores = [sim[1] for sim in sorted_dataset] 
     
     nPoints = len(sim_scores)
@@ -59,6 +60,7 @@ def elbow_threshold(sorted_dataset):
     return sim_scores[idxOfBestPoint],idxOfBestPoint
 
 def unsupervised_labels(sorted_dataset,threshold_value):
+    # Adapted from https://github.com/wbsg-uni-mannheim/UnsupervisedBootAL on 2022-16-04
     # Get scores and ids
     sim_scores = [sim[1] for sim in sorted_dataset] 
     sim_ids = [sim[0] for sim in sorted_dataset]
@@ -71,11 +73,11 @@ def unsupervised_labels(sorted_dataset,threshold_value):
     sim_score_matches= sim_scores[-(len(sorted_dataset)-threshold_index):]
 
     # Calculate the condifence weights
-    weights_unmatches = abs(sim_scores[:threshold_index]-threshold_value)/(threshold_value-min(sim_scores))
+    weights_nonmatches = abs(sim_scores[:threshold_index]-threshold_value)/(threshold_value-min(sim_scores))
     weights_matches = abs(sim_scores[-(len(sorted_dataset)-threshold_index):]-threshold_value)/(max(sim_scores)-threshold_value)
     # Join all 
-    matches_score_weight = list(zip(sim_ids_matches,sim_score_matches,weights_matches))
-    unmatches_score_weight = list(zip(sim_ids_nonmatches,sim_score_nonmatches,weights_unmatches))
+    matches_score_weight = list(zip(sim_ids_matches,sim_score_matches,weights_matches,np.ones(len(sim_ids_matches))))
+    nonmatches_score_weight = list(zip(sim_ids_nonmatches,sim_score_nonmatches,weights_nonmatches,np.zeros(len(sim_ids_nonmatches))))
     
     
-    return matches_score_weight, unmatches_score_weight
+    return matches_score_weight, nonmatches_score_weight

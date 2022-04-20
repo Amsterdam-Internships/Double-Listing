@@ -62,11 +62,14 @@ def get_dataframe_info(df):
     
     return df_null_count
 
+
 def clean_string(string):
-    res = re.sub(r'[^\w\s]', '', string)
-    res = res.lower()
-    return res 
-    
+    if type(string) == str:
+        res = re.sub(r'[^\w\s]', ' ', string)
+        res = res.lower()
+        return res
+    else:
+        return np.nan
 def helper_negative_ones(x):
     if x == -1 or x == '-1':
         return 1
@@ -78,4 +81,24 @@ def helper_negative_ones(x):
         return 1
     else:
         return x
+
+def clean_descrp(string):
+    string = string.replace('<br />', '').replace('<b>', '').replace('</b>', '').replace('Registratienummer', '')
+    string = string.replace('\x80', '').replace('\x92', '').replace('\x94', '').replace('\x91', '')
+    string = re.sub('[0-9][0-9][0-9][0-9] [0-9][0-9][0-9][A-Z] [0-9][A-Z][0-9][0-9] [0-9][0-9][A-Z][0-9] [A-Z][0-9][A-Z][A-Z]','',string)
+    string = re.sub('[0-9]','',string)
+    
+    string= clean_string(string)
+    string =string.replace('br', '')
+    return(string)
+    
+
+def join(strings):
+    final_string = ''
+    for x in strings:
+        x = clean_descrp(x)
+        if not re.match(x,final_string):
+            final_string += x
+            final_string += ' '
+    return final_string
  

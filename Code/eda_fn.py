@@ -2,6 +2,10 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import re
+from PIL import Image
+import requests
+import torchvision.transforms.functional as fn
+from torchvision import transforms
 
 def histogram(df,column,bins=False):
     #Histograms for EDA
@@ -102,3 +106,5 @@ def join(strings):
             final_string += ' '
     return final_string
  
+def retreive_img():
+    return

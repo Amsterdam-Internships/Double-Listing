@@ -5,6 +5,14 @@ from recordlinkage.algorithms.distance import _haversine_distance
 from recordlinkage.algorithms.numeric import _linear_sim
 from recordlinkage.utils import fillna as _fillna
 from functools import partial
+import torch
+from torch import nn
+import torch.nn.functional as F
+import numpy as np
+from nltk.corpus import stopwords
+from nltk.stem import SnowballStemmer
+from nltk.tokenize import sent_tokenize, word_tokenize
+
 
 
 
@@ -174,3 +182,51 @@ def get_geo(lat1, lng1, lat2, lng2):
             return c
     else:
         return 'LAT or LNG in worng format'
+
+def cos_similarity(embeddings_1, embeddings_2,norm =False):
+    #Calculate the cosine similarity wither normalized or not
+    cos = nn.CosineSimilarity(dim=1, eps=1e-6)
+    # If there is a nan value return -1
+    if type(embeddings_1) == float or type(embeddings_2) == float:
+        return -1
+    else:
+        #Normalized for LaBSE     
+        if norm ==True:
+            if float(embeddings_1.sum()) != 0.0 and  float(embeddings_2.sum()) != 0:
+                normalized_embeddings_1 = F.normalize(embeddings_1, p=2)
+                normalized_embeddings_2 = F.normalize(embeddings_2, p=2)
+                return float(cos(normalized_embeddings_1, normalized_embeddings_2))
+            else:
+                return -1
+        else:
+            if float(embeddings_1.sum()) != 0.0 and  float(embeddings_2.sum()) != 0:
+                return float(cos(embeddings_1,embeddings_2))
+            else:
+                return -1
+
+def transform_torch(list):
+    #Tranforms str list with array which was converted wrongly '[1.2332,....,-0.323]'
+    return torch.Tensor([[np.float(x) for x in list[1:-1].split(',')]])
+
+
+
+
+def clean_tfidf(string):
+    #Cleaning strings for tf-idf analysis
+    snowball_eng = SnowballStemmer(language='english')
+    snowball_nl = SnowballStemmer(language='dutch')
+
+    stopword_list = stopwords.words('dutch') +  stopwords.words('english')
+    if type(string) != float:
+        token_words=word_tokenize(string)
+        stem_sentence=[]
+        for word in token_words:
+            if word not in stopword_list:
+                word = snowball_eng.stem(word)
+                word = snowball_nl.stem(word)
+                stem_sentence.append(word)
+                stem_sentence.append(" ")
+        return "".join(stem_sentence)
+    else:
+        # If np.nan return '' so there is not an error
+        return ""

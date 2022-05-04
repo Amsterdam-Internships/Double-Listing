@@ -8,10 +8,14 @@ from functools import partial
 import torch
 from torch import nn
 import torch.nn.functional as F
+import torchvision.transforms.functional as fn
+from torchvision import transforms
 import numpy as np
 from nltk.corpus import stopwords
 from nltk.stem import SnowballStemmer
 from nltk.tokenize import sent_tokenize, word_tokenize
+from PIL import Image
+import requests
 
 
 
@@ -205,11 +209,11 @@ def cos_similarity(embeddings_1, embeddings_2,norm =False):
                 return -1
 
 def transform_torch(list):
-    #Tranforms str list with array which was converted wrongly '[1.2332,....,-0.323]'
-    return torch.Tensor([[np.float(x) for x in list[1:-1].split(',')]])
-
-
-
+    if type(list) != float :
+        #Tranforms str list with array which was converted wrongly '[1.2332,....,-0.323]'
+        return torch.Tensor([[np.float(x) for x in list[1:-1].split(',')]])
+    else:
+        return np.float('nan')
 
 def clean_tfidf(string):
     #Cleaning strings for tf-idf analysis
@@ -230,3 +234,25 @@ def clean_tfidf(string):
     else:
         # If np.nan return '' so there is not an error
         return ""
+
+def retreive_img(url):
+    #Retrieve the image from link into a numpy array
+    try:
+        if type(url) != float:
+            im = Image.open(requests.get(url, stream=True).raw)
+            im = im.convert("RGB")
+            convert_tensor = transforms.ToTensor()
+            im = convert_tensor(im)
+            im = fn.resize(im, size=[224, 224])
+            im= np.array(im)
+            im = im.transpose(1,2,0)
+            im = np.expand_dims(im, axis=0)
+            return im
+        else:
+            im_total_arrays = np.zeros((224,224,3))
+            im_total_arrays = np.expand_dims(im_total_arrays, axis=0)
+            return im_total_arrays
+    except Image.UnidentifiedImageError:
+        im_total_arrays = np.zeros((224,224,3))
+        im_total_arrays = np.expand_dims(im_total_arrays, axis=0)
+        return im_total_arrays

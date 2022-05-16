@@ -21,6 +21,8 @@ from sklearn.base import BaseEstimator
 from modAL.utils.data import modALinput
 from modAL.utils.selection import multi_argmax
 from modAL.disagreement import vote_entropy
+from modAL.models import ActiveLearner
+
 if sys.version_info >= (3, 4):
     ABC = abc.ABC
 else:

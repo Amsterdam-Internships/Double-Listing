@@ -19,7 +19,7 @@ from collections import Counter
 from typing import Tuple
 from sklearn.base import BaseEstimator
 from modAL.utils.data import modALinput
-from modAL.utils.selection import multi_argmax
+from modAL.utils.selection import multi_argmax,shuffled_argmax
 from modAL.disagreement import vote_entropy
 from modAL.models import ActiveLearner
 
@@ -143,7 +143,7 @@ class BaseCommittee(ABC, BaseEstimator):
         """
         return data_hstack([learner.transform_without_estimating(X) for learner in self.learner_list])
 
-    def query(self, X_pool, *query_args, **query_kwargs) -> Union[Tuple, modALinput]:
+    def query(self, X_pool,boots: bool = False ,*query_args, **query_kwargs) -> Union[Tuple, modALinput]:
         """
         Finds the n_instances most informative point in the data provided by calling the query_strategy function.
 
@@ -159,7 +159,7 @@ class BaseCommittee(ABC, BaseEstimator):
             be labelled and the instances themselves. Can be different in other cases, for instance only the instance to
             be labelled upon query synthesis.
         """
-        query_result = self.query_strategy(self, X_pool, *query_args, **query_kwargs)
+        query_result = self.query_strategy(self, X_pool,boots=boots *query_args, **query_kwargs)
         if isinstance(query_result, tuple):
             warnings.warn("Query strategies should no longer return the selected instances, "
                           "this is now handled by the query method. "
@@ -206,7 +206,7 @@ class BaseCommittee(ABC, BaseEstimator):
     def vote(self, X: modALinput) -> Any:  # TODO: clarify typing
         pass
 def vote_entropy_sampling(committee: BaseCommittee, X: modALinput,
-                          n_instances: int = 100, random_tie_break=False,
+                          n_instances: int = 1, random_tie_break=False,boots:bool = False,
                           **disagreement_measure_kwargs) -> np.ndarray:
     """
     Vote entropy sampling strategy.
@@ -224,10 +224,14 @@ def vote_entropy_sampling(committee: BaseCommittee, X: modALinput,
         The indices of the instances from X chosen to be labelled;
          the instances from X chosen to be labelled.
     """
+    if boots == False:
+        n_instances = 1
+    else:
+        n_instances =100
     disagreement = vote_entropy(committee, X, **disagreement_measure_kwargs)
-    #if not random_tie_break:
-    return multi_argmax(disagreement, n_instances=n_instances)
-    #return shuffled_argmax(disagreement, n_instances=n_instances)
+    if not random_tie_break:
+        return multi_argmax(disagreement, n_instances=n_instances)
+    return shuffled_argmax(disagreement, n_instances=n_instances)
 class Committee(BaseCommittee):
     """
     This class is an abstract model of a committee-based active learning algorithm.

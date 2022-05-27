@@ -25,6 +25,26 @@ def scoring_unsupervised(df,baseline =False):
         other_columns_mean = other_columns_sum/len(other_columns.columns)
         other_columns_mean = np.interp(other_columns_mean, (other_columns_mean.min(), other_columns_mean.max()), (0, +1))
 
+def scoring_unsupervised(df,baseline =False):
+    if baseline == False:
+
+        # Adapted from https://github.com/wbsg-uni-mannheim/UnsupervisedBootAL on 2022-16-04
+        # Only using the scores
+        other_columns  = df.drop(['ListingId_1','ListingId_2','ids'], axis=1)
+        #Including nan values to count the densities
+        other_columns = other_columns.replace(-1.0,np.nan)
+        #Column densities
+        column_weights = []
+        for c in other_columns:
+            nan_values = other_columns[c].isna().sum()
+            ratio = float(nan_values)/float(len(other_columns[c]))
+            column_weights.append(1.0-ratio)
+        #Create normalized values
+        weighted_columns = other_columns*column_weights
+        other_columns_sum = weighted_columns.sum(axis=1, skipna=True)
+        other_columns_mean = other_columns_sum/len(other_columns.columns)
+        other_columns_mean = np.interp(other_columns_mean, (other_columns_mean.min(), other_columns_mean.max()), (0, +1))
+
         sorted_dataset = list(zip(df['ids'], other_columns_mean, np.arange(df['ids'].size)))
         #random.Random(0).shuffle(sorted_dataset)
         sorted_dataset.sort(key = lambda t: t[1])

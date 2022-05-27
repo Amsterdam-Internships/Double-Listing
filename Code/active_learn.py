@@ -391,3 +391,318 @@ class Committee(BaseCommittee):
                     all_labels=self.classes_
                 )
         return proba
+def al(df,df_test,queries = 20,baseline=False,committee_pred=False,incremental_comitee = False,boostrap = False,warm =False):
+    if incremental_comitee == True:
+        #Commitee of models
+        members = [randomforest_main,desiciontree,logisticreg,xbg_class,svm]
+    if incremental_comitee == False:
+         members = [randomforest_com,desiciontree,logisticreg,xbg_class,svm]
+
+    #List with comitee object
+    learner_list = list()
+
+    if baseline == False:
+        #Only use the data corresponding to the features to train
+        not_train = ['ListingId_1','ListingId_2','ids', 'agg_score', 'weights','uns_label','label']
+    if baseline == True:
+        #Only use the data corresponding to the features to train
+        not_train = ['source_id','target_id','ids', 'agg_score', 'weights','uns_label','label']
+
+    ids = df['ids'].values
+    X_pool = df.drop(not_train, axis=1).values
+    y_uns_label = df['uns_label'].values
+    y_uns_weight = df['weights'].values
+
+    y_pool_labels = df['label'].values
+    y_test = df_test['label'].values
+    X_test = df_test.drop(not_train, axis=1).values
+
+    #Will save the new labels being labeled
+    new_labels = []
+
+    if boostrap == True:
+        # Selecting the 2 most confident labels, a positive a negative with weight 1
+        train_idx = np.where(y_uns_weight> 0.99998)
+        #This is the labeled pool it starts with 2 examples
+        X_train_lb = X_pool[train_idx]
+        y_train_lb = y_uns_label[train_idx]
+        #Delete used results
+        X_pool = np.delete(X_pool, train_idx, axis=0)
+        ids = np.delete(ids, train_idx, axis=0)
+        y_uns_label = np.delete(y_uns_label, train_idx, axis=0)
+        y_uns_weight = np.delete(y_uns_weight, train_idx, axis=0)
+        y_pool_labels = np.delete(y_pool_labels, train_idx, axis=0)
+    else:
+
+        #If no boostrapping the model is initialized with random instances until there is one positive and negative
+        train_idx = np.random.choice(X_pool.shape[0], 1, replace=False)
+        X_train_lb = X_pool[train_idx]
+        if baseline ==True:
+                y_train_lb = y_pool_labels[train_idx]
+        else:
+            #
+            if np.isnan(y_pool_labels[train_idx]):
+                print("Are this two listings the same one? 1-match , 0-nonmatch, 2-more=info")
+                ids_int = [int(x) for x in ids[train_idx][0][1:-1].split(',')]
+                print(compare(df_full,ids_int[0],ids_int[1]))
+                label = int(input())
+                if label == 2:
+                    print(compare(df_full,ids_int[0],ids_int[1],full=True))
+                    label = int(input())
+                    y_new = np.array([label], dtype=float)
+                else:
+                    y_new = np.array([label], dtype=float)
+                new_labels.append([(ids_int[0],ids_int[1]),label])
+                y_train_lb = y_new
+            else:
+                y_train_lb = y_pool_labels[train_idx]
+
+
+        #Delete instances moved
+        X_pool = np.delete(X_pool, train_idx, axis=0)
+        ids = np.delete(ids, train_idx, axis=0)
+        y_uns_label = np.delete(y_uns_label, train_idx, axis=0)
+        y_uns_weight = np.delete(y_uns_weight, train_idx, axis=0)
+        y_pool_labels = np.delete(y_pool_labels, train_idx, axis=0)
+
+
+        while 1 not in y_train_lb or 0 not in y_train_lb :
+            # Keep selecting till at least 1 postive and neagtive label has been added
+            train_idx = np.random.choice(X_pool.shape[0], 1, replace=False)
+            X_train_lb = np.concatenate((X_train_lb,X_pool[train_idx]),axis=0)
+            #For baseline just take the correct label
+            if baseline ==True:
+                y_train_lb = np.concatenate((y_train_lb,y_pool_labels[train_idx]),axis =0)
+            else:
+                #If label not available ask for it to the oracle
+                if np.isnan(y_pool_labels[train_idx]):
+                    print("Are this two listings the same one? 1-match , 0-nonmatch, 2-more=info")
+                    ids_int = [int(x) for x in ids[train_idx][0][1:-1].split(',')]
+                    print(compare(df_full,ids_int[0],ids_int[1]))
+                    label = int(input())
+                    #Extra info needed
+                    if label == 2:
+                        print(compare(df_full,ids_int[0],ids_int[1],full=True))
+                        label = int(input())
+                        y_new = np.array([label], dtype=float)
+                    else:
+                        y_new = np.array([label], dtype=float)
+                    new_labels.append([(ids_int[0],ids_int[1]),label])
+                    y_train_lb = np.concatenate((y_train_lb,y_new),axis =0)
+                #If label has already been given in past runs just take it
+                else:
+                    y_train_lb = np.concatenate((y_train_lb,y_pool_labels[train_idx]),axis =0)
+
+            #Delete from unlabeled pool
+            X_pool = np.delete(X_pool, train_idx, axis=0)
+            ids = np.delete(ids, train_idx, axis=0)
+            y_uns_label = np.delete(y_uns_label, train_idx, axis=0)
+            y_uns_weight = np.delete(y_uns_weight, train_idx, axis=0)
+            y_pool_labels = np.delete(y_pool_labels, train_idx, axis=0)
+
+        #Check proggress
+        print(X_train_lb.shape,y_train_lb.shape)
+
+    #Only if warm adn boostraapp is specified we use the unsupervied labels
+    if warm == True and boostrap == True:
+        # initializing main random forest
+        model_main = randomforest_main()
+        model_main.fit(X_pool,y_uns_label,sample_weight= y_uns_weight)
+        print('unsupervised')
+    #Just Using  the warm true rf but not uns labels
+    if warm == True and boostrap == False:
+        # initializing main random forest
+        model_main = randomforest_main()
+        model_main.fit(X_train_lb,y_train_lb)
+    #Normal RF
+    if warm ==False:
+        model_main = randomforest_com()
+        model_main.fit(X_train_lb,y_train_lb)
+
+    for clf in members:
+        # initializing learner
+        learner = ActiveLearner(
+            estimator=clf(),
+            X_training=X_train_lb, y_training=y_train_lb
+            )
+        learner_list.append(learner)
+
+
+    # assembling the committee
+    committee = Committee(learner_list=learner_list,query_strategy=vote_entropy_sampling,boots=boostrap)
+
+
+
+    # we want to only use the prediction of the random forest which will be incrementally built
+
+    #Get predictions of test set
+    if committee_pred == False:
+        y_pred = model_main.predict(X_test)
+    if committee_pred == True:
+        y_pred = committee.predict(X_test)
+
+    #Calculate evaluation metrics
+    precision_recall_fscore= precision_recall_fscore_support(y_test,y_pred,average='binary',zero_division=0)
+    precision_scores = [precision_recall_fscore[0]]
+    recall_scores=  [precision_recall_fscore[1]]
+    f_score = [precision_recall_fscore[2]]
+
+
+
+    # query by committee
+    n_queries = queries
+    #Active Learning Loop
+    for idx in range(n_queries):
+        print('Iteration:',idx)
+        # Committee models gives the instance to be labeled
+        query_idx, query_instance = committee.query(X_pool)
+
+        if boostrap == True:
+            #Get the predictions of the most informative instances
+            preds =committee.predict(X_pool)
+            #idx_new = np.array([np.argwhere(ids_main == ids[x])[0] for x in query_idx]).squeeze()
+
+            #Only chose the instances which disagree with the unsupervised labels
+            idx_reduced_bool = preds[query_idx] != y_uns_label[query_idx]
+
+            if sum(idx_reduced_bool) > 1:
+                #If there is more than one prediction disagreement chose the first one
+                idx_reduced = query_idx[idx_reduced_bool][0]
+                idx_reduced = np.expand_dims(idx_reduced, axis=0)
+
+            else:
+                #If there is not disgreement just chose the first instance which is gotten by vote entropy
+                print('No disagreement uns labels and pred labels')
+                idx_reduced = query_idx[0]
+                idx_reduced = np.expand_dims(idx_reduced, axis=0)
+        else:
+            #If no boostrapping use the most informative instance by vote entropy only
+            idx_reduced = query_idx[0]
+            idx_reduced = np.expand_dims(idx_reduced, axis=0)
+
+
+        #For AMS data we need to query the user directly
+        if baseline == False:
+            #Check if the label has already been given and saved
+            if np.isnan(y_pool_labels[idx_reduced]):
+
+                print("Are this two listings the same one? 1-match , 0-nonmatch, 2-more=info")
+                ids_int = [int(x) for x in ids[idx_reduced][0][1:-1].split(',')]
+                print(compare(df_full,ids_int[0],ids_int[1]))
+                label = int(input())
+                #If label 2 we need more info
+                if label == 2:
+                    print(compare(df_full,ids_int[0],ids_int[1],full=True))
+                    label = int(input())
+                    y_new = np.array([label], dtype=float)
+                else:
+                    y_new = np.array([label], dtype=float)
+                new_labels.append([(ids_int[0],ids_int[1]),label])
+            #If label is already given just take it and dont ask for it again, saving time hopefully
+            else:
+                label = y_pool_labels[idx_reduced[0]]
+                y_new = np.array([label], dtype=float)
+
+        if baseline == True:
+            #For baseline we can access the true labels no need to ask just retreive
+            label = y_pool_labels[idx_reduced[0]]
+            y_new = np.array([label], dtype=float)
+
+
+
+        #This will add the labeled data into the same arrays
+        X_train_lb = np.concatenate((X_train_lb,X_pool[idx_reduced]),axis=0)
+        y_train_lb = np.concatenate((y_train_lb,y_new),axis =0)
+
+
+        for model in committee:
+            #Train the random forest in incremental way with the labeled instance
+            if incremental_comitee == True:
+                if type(model.get_params()['estimator'])== sklearn.ensemble._forest.RandomForestClassifier:
+
+                    n_estimators = model.get_params()['estimator__n_estimators'] +2
+                    params_rf = {'estimator__n_estimators':n_estimators} #,'estimator__max_depth': n_estimators
+                    model.set_params(**params_rf)
+                    #Teach the random forest , boostrap true is incremental
+                    model.teach(X_train_lb, y_train_lb)
+
+                    #Predict with the new instance
+                    # we want to only use the prediction of the random forest which will be incrementally built
+                else:
+
+                    model.teach(X_train_lb, y_train_lb)
+            else:
+                model.teach(X_train_lb, y_train_lb)
+
+        if warm == True and boostrap == True:
+            #Teach the random forest Increase estimators for incremental learning
+            model_main.n_estimators += 2
+            #model_main.fit(X_pool_main,y_uns_label,sample_weight=y_uns_weight)
+            model_main.fit(X_train_lb,y_train_lb,sample_weight =np.ones(y_train_lb.shape[0]))
+        if warm == True and boostrap == False:
+            #Teach the random forest Increase estimators for incremental learning
+            model_main.n_estimators += 2
+            #model_main.fit(X_pool_main,y_uns_label,sample_weight=y_uns_weight)
+            model_main.fit(X_train_lb,y_train_lb)
+
+        if warm ==False:
+            model_main.fit(X_train_lb,y_train_lb)
+        #Predict with the new instance
+        # we want to only use the prediction of the random forest which will be incrementally built
+        if committee_pred == False:
+            y_pred = model_main.predict(X_test)
+        else:
+            y_pred = committee.predict(X_test)
+
+        #Get evaluation scores
+        precision_recall_fscore=precision_recall_fscore_support(y_test,y_pred,average='binary',zero_division=0)
+        precision_scores.append(precision_recall_fscore[0])
+        recall_scores.append(precision_recall_fscore[1])
+        f_score.append(precision_recall_fscore[2])
+        #Save results for further analysis
+        dict_results = {'precision_scores':precision_scores,'recall_scores':recall_scores,
+                        'f_score':f_score}
+
+        #Delete the queried instance from the pool
+        X_pool = np.delete(X_pool, idx_reduced, axis=0)
+        ids = np.delete(ids, idx_reduced, axis=0)
+        y_uns_label = np.delete(y_uns_label, idx_reduced, axis=0)
+        y_pool_labels = np.delete(y_pool_labels, idx_reduced, axis=0)
+
+        #Save labels to be added for further runs
+        if baseline ==False:
+            new_labels.append([(ids_int[0],ids_int[1]),label])
+
+
+    #Graph to check the learning process
+    with plt.style.context('seaborn-white'):
+        plt.figure(figsize=(5, 5))
+        plt.subplot(1, 1, 1)
+        plt.title('Precision of your model')
+        plt.plot(range(n_queries+1), precision_scores)
+        #plt.scatter(range(n_queries+1), precision_scores)
+        plt.xlabel('number of queries')
+        plt.ylabel('Precision')
+        display.display(plt.gcf())
+        plt.close('all')
+    with plt.style.context('seaborn-white'):
+        plt.figure(figsize=(5, 5))
+        plt.subplot(1, 1, 1)
+        plt.title('recall_scores of your model')
+        plt.plot(range(n_queries+1), recall_scores)
+        #plt.scatter(range(n_queries+1), recall_scores)
+        plt.xlabel('number of queries')
+        plt.ylabel('recall_scores')
+        display.display(plt.gcf())
+        plt.close('all')
+    with plt.style.context('seaborn-white'):
+        plt.figure(figsize=(5, 5))
+        plt.subplot(1, 1, 1)
+        plt.title('f_score of your model')
+        plt.plot(range(n_queries+1), f_score)
+        #plt.scatter(range(n_queries+1), f_score)
+        plt.xlabel('number of queries')
+        plt.ylabel('f_score')
+        display.display(plt.gcf())
+        plt.close('all')
+    return new_labels, dict_results
